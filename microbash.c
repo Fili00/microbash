@@ -39,7 +39,7 @@ void cd(char* path, char* np){
     free(buf);
 }
 
-void parser(char* cmd){
+void parser(char* path, char* cmd){
     cmd[strlen(cmd)-1]=0; //tolgo \n alla fine della riga
 
     char* buf;
@@ -53,8 +53,6 @@ void parser(char* cmd){
     char* saveptrarg = NULL;
 
     char* arg;
-
-
 
     for (buf = strtok_r(buf, "|", &saveptr); buf != NULL; buf = strtok_r(NULL, "|", &saveptr)) {
         int i=0;
@@ -71,9 +69,10 @@ void parser(char* cmd){
             strcpy(argv[i],arg);
         }
 
-        int j;
-        for(j=0; j<i; j++)
-            printf("argv[%d]=%s\n",j,argv[j]);
+        if(!strcmp(argv[0],"cd"))
+            cd(path, argv[1]);
+        else
+            ; //roba varia noiosa
 
     }
 }
@@ -91,7 +90,7 @@ int main() {
     for(;;) {
         printf("%s $ ", currentDir(path));
         fgets(cmd, 500, stdin);
-        parser(cmd);
+        parser(path, cmd);
 
 
     }
