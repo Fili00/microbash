@@ -24,16 +24,18 @@ void cd(char* path, char* np){
     if((buf = calloc(strlen(path)+1, sizeof(char))) == NULL)
         perror("calloc error: ");
     strcpy(buf, path);
-    printf("%s %d\n\n",np,strlen(np));
 
     if(*np == '/')
         strcpy(path, np);
-    else{
+    else if(!strncmp(np,"..",2)){
+        ;
+    }else{
         strcat(path,"/");
         strcat(path,np);
     }
 
     if(chdir(np)) {
+        printf("[%s]",np);
         strcpy(path, buf);
     }
     free(buf);
@@ -91,7 +93,5 @@ int main() {
         printf("%s $ ", currentDir(path));
         fgets(cmd, 500, stdin);
         parser(path, cmd);
-
-
     }
 }
