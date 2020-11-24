@@ -1,2 +1,9 @@
 per segnalare gli errori che usano errno usare la funzione perror
 return EXIT_FAILURE;
+
+per dubbi sulla fork vedere lezione 13/11/2020 
+
+non servono relazioni, solo sorgenti e makefile
+
+l'unica funzione che non si può usare, ovviamente, è la system
+
