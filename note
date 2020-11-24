@@ -1,0 +1,2 @@
+per segnalare gli errori che usano errno usare la funzione perror
+return EXIT_FAILURE;
