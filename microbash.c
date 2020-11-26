@@ -262,4 +262,6 @@ int main() {
         //wait
     }
     free(dir);
+
+    //ciao
 }
