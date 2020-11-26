@@ -83,15 +83,22 @@ void clean(char ** v){
     free(v);
 }
 
-void my_exec(char* cmd, char** argv, char **argve, int fdIn, int fdOut){
+int my_exec(char* cmd, char** argv, char **argve, int fdIn, int fdOut){
     printf("%p ", argv);
     printf("%p \n", argve);
-    //fork
-    //redirezione
-    //exec
-
+    pid_t pid = fork();
+    if(pid<0){
+        perror("Error fork: ");
+        return EXIT_FAILURE;
+    }
+    if(pid == 0){
+        //redirezione
+        //exec
+        ;//figlio
+    }
     clean(argv);
     clean(argve);
+    return EXIT_SUCCESS;
 }
 
 
