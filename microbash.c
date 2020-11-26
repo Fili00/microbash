@@ -95,7 +95,7 @@ void my_exec(char* cmd, char** argv, char **argve, int fdIn, int fdOut){
 }
 
 
-void parser2(char* cmd, char*** argv, char*** argve, int* fdIn, int* fdOut){
+void parserArg(char* cmd, char*** argv, char*** argve, int* fdIn, int* fdOut){
     if(cmd[strlen(cmd)-1]=='\n')
         cmd[strlen(cmd)-1]='\0';
     int i=0;
@@ -104,12 +104,20 @@ void parser2(char* cmd, char*** argv, char*** argve, int* fdIn, int* fdOut){
     int envCount=1;
     char* arg;
     char* saveptr;
+
+    int check = 0;
+
     for(i=0; cmd[i]!='\0';i++) {
-        if (cmd[i] == ' ')
+        if (cmd[i] == ' ') {
             argCount++;
+            check = 1;
+        }
         if (cmd[i] == '$'){
-            argCount--;
-            envCount++;
+            if(check){
+                argCount--;
+                envCount++;
+                check = 1;
+            }
         }
     }
     *argv = malloc(sizeof(char*)*(argCount));
@@ -118,15 +126,33 @@ void parser2(char* cmd, char*** argv, char*** argve, int* fdIn, int* fdOut){
 
     *fdOut = STDOUT_FILENO;
     *fdIn = STDIN_FILENO;
+
+    check = 0;
+
     for (arg = strtok_r(cmd, " ", &saveptr), i=0; arg != NULL; arg = strtok_r(NULL, " ", &saveptr)) {
         if(!strncmp(arg,"$",1)){
             char * name = arg+1;
             char * value = getenv(name);
-            (*argve)[k]=malloc(strlen(name)+strlen(value));
-            strcpy((*argve)[k],name);
-            strcat((*argve)[k],"=");
-            strcat((*argve)[k],value);
-            k++;
+            if(value==NULL){
+                value=malloc(sizeof(char));
+                strcpy(value,"");
+            }
+
+            if(!check){
+                if(!strcmp(value,""))
+                    continue;
+                (*argv)[i]=malloc(strlen(value));
+                strcpy((*argv)[i],value);
+                i++;
+                check = 1;
+            }else{
+                (*argve)[k]=malloc(strlen(name)+strlen(value));
+                strcpy((*argve)[k],name);
+                strcat((*argve)[k],"=");
+                strcat((*argve)[k],value);
+                k++;
+            }
+
         }else if(arg[0]=='>') {
             *fdOut = open(arg + 1, O_WRONLY|O_CREAT);
             perror("errore >");
@@ -137,6 +163,7 @@ void parser2(char* cmd, char*** argv, char*** argve, int* fdIn, int* fdOut){
             (*argv)[i]=malloc(strlen(arg));
             strcpy((*argv)[i],arg);
             i++;
+            check = 1;
         }
     }
     (*argv)[i]=NULL;
@@ -246,7 +273,7 @@ int main() {
         int fdIn;
         int fdOut;
 
-        parser2(cmd,&argv,&argve,&fdIn,&fdOut);
+        parserArg(cmd,&argv,&argve,&fdIn,&fdOut);
         printf("%s\n",cmd);
         printf("%d %d\n",fdIn,fdOut);
         int c=0;
@@ -262,6 +289,4 @@ int main() {
         //wait
     }
     free(dir);
-
-    //ciao
 }
