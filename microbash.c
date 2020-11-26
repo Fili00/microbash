@@ -14,8 +14,7 @@ void currentDir(char* dir, long size){
     if (getcwd(path, (size_t) size) == 0)   
         perror("getcwd error: ");
 
-    //inutile
-    //strcpy(dir,"/");
+    strcpy(dir,"/");
 
     for (path = strtok_r(path, "/", &saveptr); path != NULL; path = strtok_r(NULL, "/", &saveptr))
         strcpy(dir,path);
@@ -32,12 +31,7 @@ int cd(char* np){
 }
 
 
-//bug con $PATH, errore con la malloc. Sembra che il percorso sia troppo lungo, ma non sono certo
-void variabileDiSistema(char* comando){
-    char *saveptr = NULL;
-    char* buff = getenv(strtok_r(comando,"$",&saveptr));
-    buff!=NULL? strncpy(comando,buff,26) : strcpy(comando,"(null)");
-}
+
 
 //richiede siri
 void modificaOutput(char* comando){
@@ -82,7 +76,70 @@ void modificaOutput(char* comando){
     */
 }
 
+void clean(char ** v){
+    int i=0;
+    while(v[i]!=NULL)
+        free(v[i++]);
+    free(v);
+}
 
+void my_exec(char* cmd, char** argv, char **argve, int fdIn, int fdOut){
+    printf("%p ", argv);
+    printf("%p \n", argve);
+    //fork
+    //redirezione
+    //exec
+
+    clean(argv);
+    clean(argve);
+}
+
+
+void parser2(char* cmd, char**argv, char** argve, int* fdIn, int* fdOut){
+    int i=0;
+    int k=0;
+    int argCount=2;
+    int envCount=1;
+    char* arg;
+    char* saveptr;
+    for(i=0; cmd[i]!='\0';i++) {
+        if (cmd[i] == ' ')
+            argCount++;
+        if (cmd[i] == '$'){
+            argCount--;
+            envCount++;
+        }
+    }
+    argv = malloc(sizeof(char*)*(argCount));
+    argve = malloc(sizeof(char*)*(envCount));
+
+
+    fdOut = STDOUT_FILENO;
+    fdIn = STDIN_FILENO;
+    for (arg = strtok_r(cmd, " ", &saveptr), i=0; arg != NULL; arg = strtok_r(NULL, " ", &saveptr)) {
+        if(!strncmp(arg,"$",1)){
+            char * name = arg+1;
+            char * value = getenv(name);
+            argve[k]=malloc(strlen(name)+strlen(value));
+            strcpy(argve[k],name);
+            strcat(argve[k],"=");
+            strcat(argve[k],value);
+            k++;
+        }else if(arg[0]=='>') {
+            fdOut = open(arg + 1, O_WRONLY, O_CREAT);
+        }else if(arg[0]=='<'){
+            fdIn = open(arg + 1, O_RDONLY);
+        }else{
+            argv[i]=malloc(strlen(arg));
+            strcpy(argv[i],arg);
+            i++;
+        }
+    }
+    argv[i]=NULL;
+    argve[k]=NULL;
+}
+
+/*
 void parser(char* cmd){
     cmd[strlen(cmd)-1]=0; //tolgo \n alla fine della riga
 
@@ -97,36 +154,76 @@ void parser(char* cmd){
 
     char* arg;
 
+    int controllo = 0;
+
     for (buf = strtok_r(buf, "|", &saveptr); buf != NULL; buf = strtok_r(NULL, "|", &saveptr)) {
         int i=0;
-        int countspace=0;
-        for(i=0; buf[i]!='\0';i++)
+        int k=0;
+        int argCount=2;
+        int envCount=1;
+        for(i=0; buf[i]!='\0';i++) {
             if (buf[i] == ' ')
-                countspace++;
+                argCount++;
+            if (buf[i] == '$'){
+                argCount--;
+                envCount++;
+            }
+        }
+        char ** argv = malloc(sizeof(char*)*(argCount));
+        char ** argve = malloc(sizeof(char*)*(envCount));
 
-        char ** argv = malloc(sizeof(char*)*(countspace+1));
-        i=0;
-        for (arg = strtok_r(buf, " ", &saveptrarg); arg != NULL; arg = strtok_r(NULL, " ", &saveptrarg),i++) {
-            argv[i]=malloc(strlen(arg));
-            strcpy(argv[i],arg);
+
+        int fdOut = STDOUT_FILENO;
+        int fdIn = STDIN_FILENO;
+        for (arg = strtok_r(buf, " ", &saveptrarg), i=0; arg != NULL; arg = strtok_r(NULL, " ", &saveptrarg)) {
+            if(!strncmp(arg,"$",1)){
+                char * name = arg+1;
+                char * value = getenv(name);
+                argve[k]=malloc(strlen(name)+strlen(value));
+                strcpy(argve[k],name);
+                strcat(argve[k],"=");
+                strcat(argve[k],value);
+                k++;
+            }else if(arg[0]=='>') {
+                fdOut = open(arg + 1, O_WRONLY, O_CREAT);
+            }else if(arg[0]=='<'){
+                fdIn = open(arg + 1, O_RDONLY);
+            }else{
+                argv[i]=malloc(strlen(arg));
+                strcpy(argv[i],arg);
+                i++;
+            }
+        }
+        argv[i]=NULL;
+        argve[k]=NULL;
+
+
+
+        int c1;
+        for(c1=0;c1<argCount;c1++)
+            printf("argv[%d]:%s\n",c1,argv[c1]);
+        for(c1=0;c1<envCount;c1++)
+            printf("argve[%d]:%s\n",c1,argve[c1]);
+        printf("IN: %d OUT: %d\n",fdIn,fdOut);
+        if(!strcmp(argv[0],"cd")) {
+            if(controllo != 0){
+                printf("error");
+                return;
+            }
+            cd(argv[1]);
+            controllo = 1;
+        }else {
+            if(controllo == 1){
+                printf("error");
+                return;
+            }
+            my_exec(argv[0], argv, argve, fdIn, fdOut);
+            controllo = 2;
         }
 
-        if(!strcmp(argv[0],"cd"))
-            cd( argv[1]);
-        else
-            if(!strncmp(argv[0],"$",1)){
-                variabileDiSistema(argv[0]); //roba varia noiosa
-                printf("Stampa argv: %s\n",argv[0]); 
-            }else{
-                if(!strncmp(argv[0],">",1)){
-                    //printf("STO ENTRANDO\n");
-                    modificaOutput(argv[0]);
-                    strcpy(argv[0],"\0");
-                }
-            }
     }
 }
-
+*/
 int main() {
     char* dir;
     long size = pathconf(".", _PC_PATH_MAX);
@@ -139,7 +236,22 @@ int main() {
         currentDir(dir, size);
         printf("%s $ ", dir);
         fgets(cmd, 500, stdin);
-        parser(cmd);
+
+        char** argv;
+        char** argve;
+        int fdIn;
+        int fdOut;
+
+        parser2(cmd,argv,argve,&fdIn,&fdOut);
+        printf("%s\n",cmd);
+        printf("%d %d",fdIn,fdOut);
+        /*int c=0;
+        while(argv[c]!=0)
+            printf("argv[%d] = %s\n",c,argv[c++]);
+        c = 0;
+        while(argv[c]!=0)
+            printf("argve[%d] = %s\n",c,argve[c++]);*/
+        //wait
     }
     free(dir);
 }
