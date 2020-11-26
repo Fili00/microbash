@@ -95,7 +95,9 @@ void my_exec(char* cmd, char** argv, char **argve, int fdIn, int fdOut){
 }
 
 
-void parser2(char* cmd, char**argv, char** argve, int* fdIn, int* fdOut){
+void parser2(char* cmd, char*** argv, char*** argve, int* fdIn, int* fdOut){
+    if(cmd[strlen(cmd)-1]=='\n')
+        cmd[strlen(cmd)-1]='\0';
     int i=0;
     int k=0;
     int argCount=2;
@@ -110,33 +112,35 @@ void parser2(char* cmd, char**argv, char** argve, int* fdIn, int* fdOut){
             envCount++;
         }
     }
-    argv = malloc(sizeof(char*)*(argCount));
-    argve = malloc(sizeof(char*)*(envCount));
+    *argv = malloc(sizeof(char*)*(argCount));
+    *argve = malloc(sizeof(char*)*(envCount));
 
 
-    fdOut = STDOUT_FILENO;
-    fdIn = STDIN_FILENO;
+    *fdOut = STDOUT_FILENO;
+    *fdIn = STDIN_FILENO;
     for (arg = strtok_r(cmd, " ", &saveptr), i=0; arg != NULL; arg = strtok_r(NULL, " ", &saveptr)) {
         if(!strncmp(arg,"$",1)){
             char * name = arg+1;
             char * value = getenv(name);
-            argve[k]=malloc(strlen(name)+strlen(value));
-            strcpy(argve[k],name);
-            strcat(argve[k],"=");
-            strcat(argve[k],value);
+            (*argve)[k]=malloc(strlen(name)+strlen(value));
+            strcpy((*argve)[k],name);
+            strcat((*argve)[k],"=");
+            strcat((*argve)[k],value);
             k++;
         }else if(arg[0]=='>') {
-            fdOut = open(arg + 1, O_WRONLY, O_CREAT);
+            *fdOut = open(arg + 1, O_WRONLY|O_CREAT);
+            perror("errore >");
         }else if(arg[0]=='<'){
-            fdIn = open(arg + 1, O_RDONLY);
+            *fdIn = open(arg + 1, O_RDONLY);
+            perror("errore <");
         }else{
-            argv[i]=malloc(strlen(arg));
-            strcpy(argv[i],arg);
+            (*argv)[i]=malloc(strlen(arg));
+            strcpy((*argv)[i],arg);
             i++;
         }
     }
-    argv[i]=NULL;
-    argve[k]=NULL;
+    (*argv)[i]=NULL;
+    (*argve)[k]=NULL;
 }
 
 /*
@@ -237,20 +241,20 @@ int main() {
         printf("%s $ ", dir);
         fgets(cmd, 500, stdin);
 
-        char** argv;
-        char** argve;
+        char** argv=NULL;
+        char** argve=NULL;
         int fdIn;
         int fdOut;
 
-        parser2(cmd,argv,argve,&fdIn,&fdOut);
+        parser2(cmd,&argv,&argve,&fdIn,&fdOut);
         printf("%s\n",cmd);
-        printf("%d %d",fdIn,fdOut);
-        /*int c=0;
+        printf("%d %d\n",fdIn,fdOut);
+        int c=0;
         while(argv[c]!=0)
             printf("argv[%d] = %s\n",c,argv[c++]);
         c = 0;
         while(argv[c]!=0)
-            printf("argve[%d] = %s\n",c,argve[c++]);*/
+            printf("argve[%d] = %s\n",c,argve[c++]);
         //wait
     }
     free(dir);
