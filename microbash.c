@@ -2,6 +2,7 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
+#include <fcntl.h>
 
 void currentDir(char* dir, long size){
     char* path;
@@ -9,11 +10,12 @@ void currentDir(char* dir, long size){
 
     if((path = (char *)malloc((size_t)size)) == NULL)
         perror("malloc error: ");
-
-    if (getcwd(path, (size_t) size) == 0)
+    //path contiene il percorso assoluto attuale
+    if (getcwd(path, (size_t) size) == 0)   
         perror("getcwd error: ");
 
-    strcpy(dir,"/");
+    //inutile
+    //strcpy(dir,"/");
 
     for (path = strtok_r(path, "/", &saveptr); path != NULL; path = strtok_r(NULL, "/", &saveptr))
         strcpy(dir,path);
@@ -28,6 +30,58 @@ int cd(char* np){
     }
     return res;
 }
+
+
+//bug con $PATH, errore con la malloc. Sembra che il percorso sia troppo lungo, ma non sono certo
+void variabileDiSistema(char* comando){
+    char *saveptr = NULL;
+    char* buff = getenv(strtok_r(comando,"$",&saveptr));
+    buff!=NULL? strncpy(comando,buff,26) : strcpy(comando,"(null)");
+}
+
+//richiede siri
+void modificaOutput(char* comando){
+    char *saveptr = NULL; 
+    char* buff = strtok_r(comando,">",&saveptr);
+    printf("%s\n",buff);
+    //codice che funge ma non penso vada bene
+    int fw=open(buff,O_CREAT|O_WRONLY|O_APPEND);
+    if(fw<0)
+        perror("errore apertura file: ");
+    write(fw,"Ciao\n",5);
+    close(fw);
+    
+    /*
+    stackoverflow che non capisco
+    int fd;
+    fpos_t pos;
+    printf("stdout, ");
+    fflush(stdout);
+    fgetpos(stdout,&pos);
+    fd = dup(fileno(stdout));
+    printf("stdout in f()");
+    fflush(stdout);
+    dup2(fd,fileno(stdout));
+    close(fd);
+    clearerr(stdout);
+    printf("stdout again\n");*/
+    /*
+
+    codice abortoso incompleto ora che da problemi
+    int fw=open(buff,O_CREAT|O_WRONLY|O_APPEND);
+    if(fw<0)
+        perror("errore apertura file: ");
+    close(1);
+    int tmp = dup(fw);
+    
+    //dup2 
+    if(tmp<0)
+        perror("errore copiatura file descriptor: ");
+    close(fw);
+    dup(1);
+    */
+}
+
 
 void parser(char* cmd){
     cmd[strlen(cmd)-1]=0; //tolgo \n alla fine della riga
@@ -60,7 +114,16 @@ void parser(char* cmd){
         if(!strcmp(argv[0],"cd"))
             cd( argv[1]);
         else
-            ; //roba varia noiosa
+            if(!strncmp(argv[0],"$",1)){
+                variabileDiSistema(argv[0]); //roba varia noiosa
+                printf("Stampa argv: %s\n",argv[0]); 
+            }else{
+                if(!strncmp(argv[0],">",1)){
+                    //printf("STO ENTRANDO\n");
+                    modificaOutput(argv[0]);
+                    strcpy(argv[0],"\0");
+                }
+            }
     }
 }
 
