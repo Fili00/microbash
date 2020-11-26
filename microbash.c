@@ -250,11 +250,15 @@ int main() {
         printf("%s\n",cmd);
         printf("%d %d\n",fdIn,fdOut);
         int c=0;
-        while(argv[c]!=0)
-            printf("argv[%d] = %s\n",c,argv[c++]);
+        while(argv[c]!=0) {
+            printf("argv[%d] = %s\n", c, argv[c]);
+            c++;
+        }
         c = 0;
-        while(argv[c]!=0)
-            printf("argve[%d] = %s\n",c,argve[c++]);
+        while(argve[c]!=0) {
+            printf("argve[%d] = %s\n", c, argve[c]);
+            c++;
+        }
         //wait
     }
     free(dir);
