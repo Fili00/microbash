@@ -3,6 +3,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <fcntl.h>
+#include <sys/wait.h>
+#include <string.h>
 
 void currentDir(char* dir, long size){
     char* path;
@@ -24,56 +26,11 @@ void currentDir(char* dir, long size){
 
 int cd(char* np){
     int res;
-    if((res = chdir(np))) {
+    if((res = chdir(np)))
         printf("No such file or directory: %s\n", np);
-    }
+    if(np == NULL)
+        printf("Invalid argument");
     return res;
-}
-
-
-
-
-//richiede siri
-void modificaOutput(char* comando){
-    char *saveptr = NULL; 
-    char* buff = strtok_r(comando,">",&saveptr);
-    printf("%s\n",buff);
-    //codice che funge ma non penso vada bene
-    int fw=open(buff,O_CREAT|O_WRONLY|O_APPEND);
-    if(fw<0)
-        perror("errore apertura file: ");
-    write(fw,"Ciao\n",5);
-    close(fw);
-    
-    /*
-    stackoverflow che non capisco
-    int fd;
-    fpos_t pos;
-    printf("stdout, ");
-    fflush(stdout);
-    fgetpos(stdout,&pos);
-    fd = dup(fileno(stdout));
-    printf("stdout in f()");
-    fflush(stdout);
-    dup2(fd,fileno(stdout));
-    close(fd);
-    clearerr(stdout);
-    printf("stdout again\n");*/
-    /*
-
-    codice abortoso incompleto ora che da problemi
-    int fw=open(buff,O_CREAT|O_WRONLY|O_APPEND);
-    if(fw<0)
-        perror("errore apertura file: ");
-    close(1);
-    int tmp = dup(fw);
-    
-    //dup2 
-    if(tmp<0)
-        perror("errore copiatura file descriptor: ");
-    close(fw);
-    dup(1);
-    */
 }
 
 void clean(char ** v){
@@ -81,28 +38,41 @@ void clean(char ** v){
     while(v[i]!=NULL)
         free(v[i++]);
     free(v);
+    v=NULL;
 }
 
-int my_exec(char* cmd, char** argv, char **argve, int fdIn, int fdOut){
-    printf("%p ", argv);
-    printf("%p \n", argve);
+int my_exec(char** argv, char **envp, int fdIn, int fdOut){
     pid_t pid = fork();
     if(pid<0){
         perror("Error fork: ");
         return EXIT_FAILURE;
     }
     if(pid == 0){
-        //redirezione
-        //exec
-        ;//figlio
+        if(fdOut!=STDOUT_FILENO) {
+            dup2(fdOut, STDOUT_FILENO);
+            close(fdOut);
+        }
+        if(fdIn!=STDIN_FILENO) {
+            dup2(fdIn, STDIN_FILENO);
+            close(fdIn);
+        }
+
+        execvp(argv[0],argv); //variabili d'ambiente
+        perror("Error executing the command");
+        clean(argv);
+        clean(envp);
+        return EXIT_FAILURE;
     }
+    if(fdOut!=STDOUT_FILENO)
+        close(fdOut);
+    if(fdIn!=STDIN_FILENO)
+        close(fdIn);
     clean(argv);
-    clean(argve);
+    clean(envp);
     return EXIT_SUCCESS;
 }
 
-
-void parserArg(char* cmd, char*** argv, char*** argve, int* fdIn, int* fdOut){
+void parserArg(char* cmd, char*** argv, char*** envp, int* fdIn, int* fdOut){
     if(cmd[strlen(cmd)-1]=='\n')
         cmd[strlen(cmd)-1]='\0';
     int i=0;
@@ -128,7 +98,7 @@ void parserArg(char* cmd, char*** argv, char*** argve, int* fdIn, int* fdOut){
         }
     }
     *argv = malloc(sizeof(char*)*(argCount));
-    *argve = malloc(sizeof(char*)*(envCount));
+    *envp = malloc(sizeof(char*)*(envCount));
 
 
     *fdOut = STDOUT_FILENO;
@@ -153,19 +123,19 @@ void parserArg(char* cmd, char*** argv, char*** argve, int* fdIn, int* fdOut){
                 i++;
                 check = 1;
             }else{
-                (*argve)[k]=malloc(strlen(name)+strlen(value));
-                strcpy((*argve)[k],name);
-                strcat((*argve)[k],"=");
-                strcat((*argve)[k],value);
+                (*envp)[k]=malloc(strlen(name)+strlen(value));
+                strcpy((*envp)[k],name);
+                strcat((*envp)[k],"=");
+                strcat((*envp)[k],value);
                 k++;
             }
 
         }else if(arg[0]=='>') {
-            *fdOut = open(arg + 1, O_WRONLY|O_CREAT);
-            perror("errore >");
+            if((*fdOut = open(arg + 1, O_WRONLY|O_CREAT, 0644)) < 0)
+                perror("errore >");
         }else if(arg[0]=='<'){
-            *fdIn = open(arg + 1, O_RDONLY);
-            perror("errore <");
+            if((*fdIn = open(arg + 1, O_RDONLY)) < 0)
+                perror("errore <");
         }else{
             (*argv)[i]=malloc(strlen(arg));
             strcpy((*argv)[i],arg);
@@ -174,94 +144,55 @@ void parserArg(char* cmd, char*** argv, char*** argve, int* fdIn, int* fdOut){
         }
     }
     (*argv)[i]=NULL;
-    (*argve)[k]=NULL;
+    (*envp)[k]=NULL;
 }
 
-/*
-void parser(char* cmd){
-    cmd[strlen(cmd)-1]=0; //tolgo \n alla fine della riga
 
-    char* buf;
-    if((buf = calloc(strlen(cmd)+1, sizeof(char))) == NULL)
-        perror("calloc error: ");
-
-    strcpy(buf, cmd);
-
-    char *saveptr = NULL;
-    char* saveptrarg = NULL;
-
+void nonsocome (char *cmd){
+    char* saveptr;
+    int n_proc=0;
+    int i;
+    int status;
+    char** argv;
+    char** envp;
     char* arg;
+    int fdIn, fdOut;
+    int pipefd[2];
+    int check=0;
 
-    int controllo = 0;
+    arg = strtok_r(cmd, "|", &saveptr);
+    while(arg != NULL) {
+        parserArg(arg, &argv, &envp, &fdIn, &fdOut);
+        if (check) {
+            fdIn = pipefd[0];
+        }
 
-    for (buf = strtok_r(buf, "|", &saveptr); buf != NULL; buf = strtok_r(NULL, "|", &saveptr)) {
-        int i=0;
-        int k=0;
-        int argCount=2;
-        int envCount=1;
-        for(i=0; buf[i]!='\0';i++) {
-            if (buf[i] == ' ')
-                argCount++;
-            if (buf[i] == '$'){
-                argCount--;
-                envCount++;
+        if((arg = strtok_r(NULL, "|", &saveptr)) != NULL){
+            pipe(pipefd);
+            fdOut = pipefd[1];
+            check=1;
+        }
+
+        printf("[%d] [%s]\n",check,arg);
+        if (!strcmp(argv[0], "cd")) {
+            if (!check && !arg) {
+                cd(argv[1]);
+            } else {
+                printf("Syntax error\n");
+                break;
             }
         }
-        char ** argv = malloc(sizeof(char*)*(argCount));
-        char ** argve = malloc(sizeof(char*)*(envCount));
 
-
-        int fdOut = STDOUT_FILENO;
-        int fdIn = STDIN_FILENO;
-        for (arg = strtok_r(buf, " ", &saveptrarg), i=0; arg != NULL; arg = strtok_r(NULL, " ", &saveptrarg)) {
-            if(!strncmp(arg,"$",1)){
-                char * name = arg+1;
-                char * value = getenv(name);
-                argve[k]=malloc(strlen(name)+strlen(value));
-                strcpy(argve[k],name);
-                strcat(argve[k],"=");
-                strcat(argve[k],value);
-                k++;
-            }else if(arg[0]=='>') {
-                fdOut = open(arg + 1, O_WRONLY, O_CREAT);
-            }else if(arg[0]=='<'){
-                fdIn = open(arg + 1, O_RDONLY);
-            }else{
-                argv[i]=malloc(strlen(arg));
-                strcpy(argv[i],arg);
-                i++;
-            }
-        }
-        argv[i]=NULL;
-        argve[k]=NULL;
-
-
-
-        int c1;
-        for(c1=0;c1<argCount;c1++)
-            printf("argv[%d]:%s\n",c1,argv[c1]);
-        for(c1=0;c1<envCount;c1++)
-            printf("argve[%d]:%s\n",c1,argve[c1]);
-        printf("IN: %d OUT: %d\n",fdIn,fdOut);
-        if(!strcmp(argv[0],"cd")) {
-            if(controllo != 0){
-                printf("error");
-                return;
-            }
-            cd(argv[1]);
-            controllo = 1;
-        }else {
-            if(controllo == 1){
-                printf("error");
-                return;
-            }
-            my_exec(argv[0], argv, argve, fdIn, fdOut);
-            controllo = 2;
-        }
+        my_exec(argv,envp,fdIn,fdOut);
+        //controllo myexec
+        n_proc++;
 
     }
+    for(i=0; i<n_proc; i++) {
+        wait(&status);
+        //controllo status
+    }
 }
-*/
 int main() {
     char* dir;
     long size = pathconf(".", _PC_PATH_MAX);
@@ -274,26 +205,11 @@ int main() {
         currentDir(dir, size);
         printf("%s $ ", dir);
         fgets(cmd, 500, stdin);
+        cmd[strlen(cmd)-1]=0;
+        if(!strcmp(cmd,"exit"))
+            break;
 
-        char** argv=NULL;
-        char** argve=NULL;
-        int fdIn;
-        int fdOut;
-
-        parserArg(cmd,&argv,&argve,&fdIn,&fdOut);
-        printf("%s\n",cmd);
-        printf("%d %d\n",fdIn,fdOut);
-        int c=0;
-        while(argv[c]!=0) {
-            printf("argv[%d] = %s\n", c, argv[c]);
-            c++;
-        }
-        c = 0;
-        while(argve[c]!=0) {
-            printf("argve[%d] = %s\n", c, argve[c]);
-            c++;
-        }
-        //wait
+        nonsocome(cmd);
     }
     free(dir);
 }
