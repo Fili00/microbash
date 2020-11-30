@@ -5,6 +5,7 @@
 #include <fcntl.h>
 #include <sys/wait.h>
 #include <string.h>
+#include <ctype.h>
 
 void currentDir(char* dir, long size){
     char* path;
@@ -24,12 +25,14 @@ void currentDir(char* dir, long size){
     free(path);
 }
 
-int cd(char* np){
+int cd(char** argv){
+    if(argv[1] == NULL || argv[2] != NULL) {
+        printf("cd has only one argument\n");
+        return 0;
+    }
     int res;
-    if((res = chdir(np)))
-        printf("No such file or directory: %s\n", np);
-    if(np == NULL)
-        printf("Invalid argument");
+    if((res = chdir(argv[1])) != 0)
+        printf("No such file or directory: %s\n", argv[1]);
     return res;
 }
 
@@ -41,11 +44,12 @@ void clean(char ** v){
     v=NULL;
 }
 
-int my_exec(char** argv, char **envp, int fdIn, int fdOut){
+void my_exec(char** argv, char **envp, int fdIn, int fdOut){
     pid_t pid = fork();
     if(pid<0){
-        perror("Error fork: ");
-        return EXIT_FAILURE;
+        perror("Fork failed: ");
+        printf("Insert new command\n");
+        return;
     }
     if(pid == 0){
         if(fdOut!=STDOUT_FILENO) {
@@ -61,7 +65,7 @@ int my_exec(char** argv, char **envp, int fdIn, int fdOut){
         perror("Error executing the command");
         clean(argv);
         clean(envp);
-        return EXIT_FAILURE;
+        exit(EXIT_FAILURE);
     }
     if(fdOut!=STDOUT_FILENO)
         close(fdOut);
@@ -69,7 +73,6 @@ int my_exec(char** argv, char **envp, int fdIn, int fdOut){
         close(fdIn);
     clean(argv);
     clean(envp);
-    return EXIT_SUCCESS;
 }
 
 void parserArg(char* cmd, char*** argv, char*** envp, int* fdIn, int* fdOut){
@@ -147,8 +150,7 @@ void parserArg(char* cmd, char*** argv, char*** envp, int* fdIn, int* fdOut){
     (*envp)[k]=NULL;
 }
 
-
-void nonsocome (char *cmd){
+void cmdHandler (char *cmd){
     char* saveptr;
     int n_proc=0;
     int i;
@@ -173,43 +175,105 @@ void nonsocome (char *cmd){
             check=1;
         }
 
-        printf("[%d] [%s]\n",check,arg);
-        if (!strcmp(argv[0], "cd")) {
-            if (!check && !arg) {
-                cd(argv[1]);
-            } else {
-                printf("Syntax error\n");
-                break;
-            }
+
+        if(!strcmp(argv[0], "cd")){
+            cd(argv);
+            return;
         }
 
         my_exec(argv,envp,fdIn,fdOut);
-        //controllo myexec
         n_proc++;
-
     }
     for(i=0; i<n_proc; i++) {
         wait(&status);
-        //controllo status
+        //mettere controllo su status
     }
 }
+
+void removeMultipleSpace(char* cmd){
+    int i;
+    int correctIndex = 0;
+    for(i=0; isspace(cmd[i]) && cmd[i] != '\0'; i++)
+        ;
+    for(;cmd[i] != '\0'; i++){
+        while(isspace(cmd[i]) && isspace(cmd[i+1])) {
+            i++;
+        }
+        cmd[correctIndex] = cmd[i];
+        correctIndex++;
+    }
+    if(isspace(cmd[correctIndex-1]))
+        correctIndex--;
+    cmd[correctIndex] = '\0';
+}
+
+
+int validate(char* cmd){
+    int i;
+    int checkPipe = 0;
+    int checkRedirect = 0;
+    if(cmd[strlen(cmd)-1]=='\n')
+        cmd[strlen(cmd)-1]='\0';
+    removeMultipleSpace(cmd);
+    int checkCD = !strncmp(cmd, "cd", 2);
+    if(cmd[0] == '|')
+        return 0;
+    if(cmd[strlen(cmd)-1] == '|')
+        return 0;
+    if(cmd[0] == '<' || cmd[0] == '>')
+        return 0;
+    if(cmd[strlen(cmd)-1] == '<' || cmd[strlen(cmd)-1] == '>')
+        return 0;
+    for(i=0;cmd[i] != '\0'; i++){
+        if(cmd[i] == '|')
+            checkPipe = 1;
+        if(cmd[i] == '|' && checkRedirect)
+            return 0;
+        if(checkPipe && cmd[i] == '<')
+            return 0;
+        if(cmd[i] == '>')
+            checkRedirect = 1;
+        if(cmd[i] == '|' && (cmd[i+2] == '<' || cmd[i+2] == '>'))
+            return 0;
+        if((cmd[i] == '|' || cmd[i] == '<' || cmd[i] == '>') && checkCD)
+            return 0;
+        if((cmd[i] == '>' || cmd[i] == '<') && isspace(cmd[i+1]))
+            return 0;
+        if(cmd[i]=='|' && ((isspace(cmd[i+1]) && cmd[i+2] == '|' ) || cmd[i+1]=='|') )
+            return 0;
+
+        if(cmd[i] == '|'){
+            if(isspace(cmd[i+1]))
+                i++;
+            if (!strncmp(&cmd[i + 1], "cd", 2))
+                return 0;
+            i--;
+        }
+    }
+
+    return 1;
+}
+
 int main() {
     char* dir;
     long size = pathconf(".", _PC_PATH_MAX);
     if((dir = (char *)malloc((size_t)size)) == NULL)
         perror("malloc error: ");
 
-    char cmd[500];
+    char cmd[1024];
 
     for(;;) {
         currentDir(dir, size);
         printf("%s $ ", dir);
-        fgets(cmd, 500, stdin);
-        cmd[strlen(cmd)-1]=0;
+        if(fgets(cmd, 1024, stdin) == 0) //EOF
+            break;
+        if(!validate(cmd)){
+            printf("Syntax error.\n");
+            continue;
+        }
         if(!strcmp(cmd,"exit"))
             break;
-
-        nonsocome(cmd);
+        cmdHandler(cmd);
     }
     free(dir);
 }
