@@ -6,6 +6,7 @@
 #include <sys/wait.h>
 #include <string.h>
 #include <ctype.h>
+#include <errno.h>
 
 void currentDir(char* dir, long size){
     char* path;
