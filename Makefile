@@ -1,22 +1,22 @@
 .PHONY: clean debug
 
 M=main
-N=microbash
+MB=microbash
 B=bin
 S=src
 FLAG=-Wall -O0 -pedantic -Werror
 
-all: $(B)/$(N)
-debug: $(B)/$(N)_debug
+all: $(B)/$(MB)
+debug: $(B)/$(MB)_debug
 
-$(B)/$(N): $(S)/$(M).c $(S)/$(N).c
-	gcc -o $(B)/$(N) $(S)/$(N).c $(S)/$(M).c -O0
+$(B)/$(MB): $(S)/$(M).c $(S)/$(MB).c
+	gcc -o $(B)/$(MB) $(S)/$(MB).c $(S)/$(M).c -O0
 
-$(B)/$(N)_debug: $(S)/$(M).c $(S)/$(N).c
-	gcc -o $(B)/$(N)_debug $(S)/$(N).c $(S)/$(M).c $(FLAG)
+$(B)/$(MB)_debug: $(S)/$(M).c $(S)/$(MB).c
+	gcc -o $(B)/$(MB)_debug $(S)/$(MB).c $(S)/$(M).c $(FLAG)
 
 clean:
-	/bin/rm -f $(B)/$(N) $(B)/$(N)_debug
+	/bin/rm -f $(B)/$(MB) $(B)/$(MB)_debug
 
 tgz: clean
-	cd .. ; tar cvzf $(N).tgz $(N)
+	cd .. ; tar cvzf $(MB).tgz $(MB)
