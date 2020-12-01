@@ -1,13 +1,13 @@
+#include "microbash.h"
 #include <stdio.h>
-#include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
 #include <fcntl.h>
 #include <sys/wait.h>
-#include <string.h>
 #include <ctype.h>
 #include <errno.h>
 
+//Funzioni ausiliarie
 void clean(char ** v){
     int i=0;
     while(v[i]!=NULL)
@@ -16,79 +16,32 @@ void clean(char ** v){
     v=NULL;
 }
 
-void currentDir(char* dir, long size){
-    char* path;
-    char *saveptr = NULL;
-    
-
-    if((path = ((char *)malloc(((size_t)size)+1))) == NULL) {
-        perror("malloc error: ");
+void swapfd(int fd1, int fd2){
+    if(dup2(fd1, fd2) < 0){
+        perror("dup");
         exit(EXIT_FAILURE);
     }
-
-    char * tmp = path;
-
-    //path contiene il percorso assoluto attuale
-    if (getcwd(path, (size_t) size) == 0)   
-        perror("getcwd error: ");
-
-    strcpy(dir,"/");
-
-    for (path = strtok_r(path, "/", &saveptr); path != NULL; path = strtok_r(NULL, "/", &saveptr))
-        strcpy(dir,path);
-
-    free(tmp);
+    close(fd1);
 }
 
-int cd(char** argv){
-    if(argv[1] == NULL || argv[2] != NULL) {
-        printf("cd has only one argument\n");
-        return 0;
-    }
-    int res;
-    if((res = chdir(argv[1])) != 0)
-        printf("No such file or directory: %s\n", argv[1]);
-    clean(argv);
-    return res;
-}
-
-
-
-void my_exec(char** argv, char **envp, int fdIn, int fdOut){
-    pid_t pid = fork();
-    if(pid<0){
-        perror("Fork failed: ");
-        exit(EXIT_FAILURE);
-    }
-    if(pid == 0){
-        if(fdOut!=STDOUT_FILENO) {
-            if(dup2(fdOut, STDOUT_FILENO) < 0){
-                perror("dup");
-                exit(EXIT_FAILURE);
-            }
-            close(fdOut);
+void removeMultipleSpace(char* cmd){
+    int i;
+    int correctIndex = 0;
+    for(i=0; isspace(cmd[i]) && cmd[i] != '\0'; i++)
+        ;
+    for(;cmd[i] != '\0'; i++){
+        while(isspace(cmd[i]) && isspace(cmd[i+1])) {
+            i++;
         }
-        if(fdIn!=STDIN_FILENO) {
-            if(dup2(fdIn, STDIN_FILENO) < 0){
-                perror("dup");
-                exit(EXIT_FAILURE);
-            }
-            close(fdIn);
-        }
-
-        execvp(argv[0],argv);
-        perror("Error executing the command");
-        clean(argv);
-        exit(EXIT_FAILURE);
+        cmd[correctIndex] = cmd[i];
+        correctIndex++;
     }
-    if(fdOut!=STDOUT_FILENO)
-        close(fdOut);
-    if(fdIn!=STDIN_FILENO)
-        close(fdIn);
-    clean(argv);
+    if(isspace(cmd[correctIndex-1]))
+        correctIndex--;
+    cmd[correctIndex] = '\0';
 }
 
-int parserArg(char* cmd, char*** argv, char*** envp, int* fdIn, int* fdOut){
+int parserArg(char* cmd, char*** argv, int* fdIn, int* fdOut){
     if(cmd[strlen(cmd)-1]=='\n')
         cmd[strlen(cmd)-1]='\0';
     int i;
@@ -148,13 +101,66 @@ int parserArg(char* cmd, char*** argv, char*** envp, int* fdIn, int* fdOut){
     return 1;
 }
 
+void my_exec(char** argv, int fdIn, int fdOut){
+    pid_t pid = fork();
+    if(pid<0){
+        perror("Fork failed: ");
+        exit(EXIT_FAILURE);
+    }
+    if(pid == 0){
+        if(fdOut!=STDOUT_FILENO)
+            swapfd(fdOut,STDOUT_FILENO);
+        if(fdIn!=STDIN_FILENO)
+            swapfd(fdIn,STDIN_FILENO);
+        execvp(argv[0],argv);
+        perror("Error executing the command");
+        clean(argv);
+        exit(EXIT_FAILURE);
+    }
+    if(fdOut!=STDOUT_FILENO)
+        close(fdOut);
+    if(fdIn!=STDIN_FILENO)
+        close(fdIn);
+    clean(argv);
+}
+
+//comandi built-in
+int cd(char** argv){
+    if(argv[1] == NULL || argv[2] != NULL) {
+        printf("cd has only one argument\n");
+        return 0;
+    }
+    int res;
+    if((res = chdir(argv[1])) != 0)
+        printf("No such file or directory: %s\n", argv[1]);
+    clean(argv);
+    return res;
+}
+
+//funzioni accessibili
+void currentDir(char* dir, long size){
+    char* path;
+    char *saveptr = NULL;
+    if((path = ((char *)malloc(((size_t)size)+1))) == NULL) {
+        perror("malloc error: ");
+        exit(EXIT_FAILURE);
+    }
+    char * tmp = path;
+    //path contiene il percorso assoluto attuale
+    if (getcwd(path, (size_t) size) == 0)   
+        perror("getcwd error: ");
+    strcpy(dir,"/");
+    for (path = strtok_r(path, "/", &saveptr); path != NULL; path = strtok_r(NULL, "/", &saveptr))
+        strcpy(dir,path);
+    free(tmp);
+}
+
 void cmdHandler (char *cmd){
     char* saveptr;
     int n_proc=0;
     int i;
     int status;
     char** argv;
-    char** envp;
     char* arg;
     int fdIn, fdOut;
     int pipefd[2];
@@ -162,25 +168,21 @@ void cmdHandler (char *cmd){
 
     arg = strtok_r(cmd, "|", &saveptr);
     while(arg != NULL) {
-        if(!parserArg(arg, &argv, &envp, &fdIn, &fdOut))
+        if(!parserArg(arg, &argv, &fdIn, &fdOut))
             break;
         if (check) {
             fdIn = pipefd[0];
         }
-
         if((arg = strtok_r(NULL, "|", &saveptr)) != NULL){
             pipe(pipefd);
             fdOut = pipefd[1];
             check=1;
         }
-
-
         if(!strcmp(argv[0], "cd")){
             cd(argv);
             return;
         }
-
-        my_exec(argv,envp,fdIn,fdOut);
+        my_exec(argv,fdIn,fdOut);
         n_proc++;
     }
     for(i=0; i<n_proc; i++) {
@@ -191,24 +193,6 @@ void cmdHandler (char *cmd){
         }
     }
 }
-
-void removeMultipleSpace(char* cmd){
-    int i;
-    int correctIndex = 0;
-    for(i=0; isspace(cmd[i]) && cmd[i] != '\0'; i++)
-        ;
-    for(;cmd[i] != '\0'; i++){
-        while(isspace(cmd[i]) && isspace(cmd[i+1])) {
-            i++;
-        }
-        cmd[correctIndex] = cmd[i];
-        correctIndex++;
-    }
-    if(isspace(cmd[correctIndex-1]))
-        correctIndex--;
-    cmd[correctIndex] = '\0';
-}
-
 
 int validate(char* cmd){
     int i;
@@ -280,30 +264,4 @@ int validate(char* cmd){
     return 1;
 }
 
-int main() {
-    char* dir;
-    long size = pathconf(".", _PC_PATH_MAX);
-    if((dir = (char *)malloc((size_t)size)) == NULL) {
-        perror("malloc error: ");
-        exit(EXIT_FAILURE);
-    }
 
-    char cmd[1024];
-
-    for(;;) {
-        currentDir(dir, size);
-        printf("%s $ ", dir);
-        if(fgets(cmd, 1024, stdin) == 0) //EOF
-            break;
-        if(!validate(cmd)){
-            printf("Syntax error.\n");
-            continue;
-        }
-        if(!strcmp(cmd,"exit"))
-            break;
-        cmdHandler(cmd);
-
-    }
-    free(dir);
-
-}
