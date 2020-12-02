@@ -1,20 +1,23 @@
 #include "microbash.h"
 #include <stdlib.h>
 #include <stdio.h>
-
+#define _GNU_SOURCE
+#include <readline/readline.h>
+#include <readline/history.h>
 int main() {
     char* dir;
     long size = pathconf(".", _PC_PATH_MAX);
-    if((dir = (char *)malloc((size_t)size)) == NULL) {
+    if((dir = (char *)malloc((size_t)size+4)) == NULL) {
         perror("malloc error: ");
         exit(EXIT_FAILURE);
     }
-    char cmd[1024];
+    char* cmd;
     for(;;) {
         currentDir(dir, size);
-        printf("%s $ ", dir);
-        if(fgets(cmd, 1024, stdin) == 0) //EOF
-            break;
+        strcat(dir, " $ ");
+        if((cmd = readline(dir)) == NULL)
+            break; 
+        add_history(cmd);
         if(!validate(cmd)){
             printf("Syntax error.\n");
             continue;

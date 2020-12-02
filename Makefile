@@ -4,13 +4,13 @@ M=main
 MB=microbash
 B=bin
 S=src
-FLAG=-Wall -O0 -pedantic -Werror
+FLAG=-Wall -O0 -pedantic -Werror -lreadline
 
 all: $(B)/$(MB)
 debug: $(B)/$(MB)_debug
 
 $(B)/$(MB): $(S)/$(M).c $(S)/$(MB).c
-	gcc -o $(B)/$(MB) $(S)/$(MB).c $(S)/$(M).c -O0
+	gcc -o $(B)/$(MB) $(S)/$(MB).c $(S)/$(M).c -O0 -lreadline
 
 $(B)/$(MB)_debug: $(S)/$(M).c $(S)/$(MB).c
 	gcc -o $(B)/$(MB)_debug $(S)/$(MB).c $(S)/$(M).c $(FLAG)
