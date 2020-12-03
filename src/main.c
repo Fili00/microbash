@@ -25,8 +25,10 @@ int main() {
         if(!strcmp(cmd,"exit"))
             break;
         cmdHandler(cmd);
-
+        free(cmd);
     }
+    clear_history();
+    free(cmd);
     free(dir);
 }
 

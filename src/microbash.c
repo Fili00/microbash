@@ -5,9 +5,9 @@
 #include <fcntl.h>
 #include <sys/wait.h>
 #include <ctype.h>
-#include <errno.h>
 
 //Funzioni ausiliarie
+//Funzione che si occupa di fare la free di un vettore di puntatori.
 void clean(char ** v){
     int i=0;
     while(v[i]!=NULL)
@@ -15,7 +15,7 @@ void clean(char ** v){
     free(v);
     v=NULL;
 }
-
+//Funzione che si occupa di cambiare file descriptor.
 void swapfd(int fd1, int fd2){
     if(dup2(fd1, fd2) < 0){
         perror("dup");
@@ -23,7 +23,8 @@ void swapfd(int fd1, int fd2){
     }
     close(fd1);
 }
-
+//Funzione che si occupa di rimuovere tutti gli spazi iniziali, finali e di sostituire gli spazi multipli con uno singolo.
+//Serve per facilitare il parsing della stringa contenente il comando
 void removeMultipleSpace(char* cmd){
     int i;
     int correctIndex = 0;
@@ -40,7 +41,12 @@ void removeMultipleSpace(char* cmd){
         correctIndex--;
     cmd[correctIndex] = '\0';
 }
-
+/* Funzione che fa il parser di un comando.
+ * Inserisce in argv tutti gli argomenti del comando mettendo nella posizione 0 il comando.
+ * Sostituisce tutte le variabili d'ambiente inserendo il loro valore dentro argv
+ * Rileva eventuali redirezioni di input/output e le inserisce dentro fdIn/fdOut
+ * Se non rileva redirezioni inserisce dentro fdIn/fdOut il valore 0/1
+ */
 int parserArg(char* cmd, char*** argv, int* fdIn, int* fdOut){
     if(cmd[strlen(cmd)-1]=='\n')
         cmd[strlen(cmd)-1]='\0';
@@ -55,7 +61,7 @@ int parserArg(char* cmd, char*** argv, int* fdIn, int* fdOut){
         else if (cmd[i] == '<' || cmd[i] == '>')
             argCount--;
     }
-    *argv = malloc(sizeof(char*)*(argCount));
+    *argv = malloc(sizeof(argCount));
     if(*argv == NULL){
         perror("malloc");
         exit(EXIT_FAILURE);
@@ -68,7 +74,7 @@ int parserArg(char* cmd, char*** argv, int* fdIn, int* fdOut){
         if(!strncmp(arg,"$",1)){
             char * name = arg+1;
             char * value = getenv(name);
-            if(value==NULL)
+            if(value==NULL) //Se la variabile d'ambiente non esiste viene ignorata
                 continue;
             (*argv)[i]=malloc(strlen(value)+1);
             if((*argv)[i] == NULL){
@@ -77,12 +83,12 @@ int parserArg(char* cmd, char*** argv, int* fdIn, int* fdOut){
             }
             strcpy((*argv)[i],value);
             i++;
-        }else if(arg[0]=='>') {
+        }else if(arg[0]=='>') { //Si aprre un file in modalita' scrittura per la redirezione dell'output, se non esiste viene creato
             if((*fdOut = open(arg + 1, O_WRONLY|O_CREAT, 0644)) < 0) {
                 perror("errore >");
                 return 0;
             }
-        }else if(arg[0]=='<'){
+        }else if(arg[0]=='<'){ //Si aprre un file in modalita' lettura per la redirezione dell'input
             if((*fdIn = open(arg + 1, O_RDONLY)) < 0) {
                 perror("errore <");
                 return 0;
@@ -100,7 +106,8 @@ int parserArg(char* cmd, char*** argv, int* fdIn, int* fdOut){
     (*argv)[i]=NULL;
     return 1;
 }
-
+//Funzione che preso argv contenente il comando e i suoi argomenti
+//e il numero dei file descriptor di input/output si occupa di fare la exec
 void my_exec(char** argv, int fdIn, int fdOut){
     pid_t pid = fork();
     if(pid<0){
@@ -125,6 +132,7 @@ void my_exec(char** argv, int fdIn, int fdOut){
 }
 
 //comandi built-in
+//Si occupa di spostarsi all'interno delle cartelle
 int cd(char** argv){
     if(argv[1] == NULL || argv[2] != NULL) {
         printf("cd has only one argument\n");
@@ -138,6 +146,8 @@ int cd(char** argv){
 }
 
 //funzioni accessibili
+//Funzione che mette all'interno di dir il nome della directory corrente.
+//Prende come parametro la dimensione massima che può avere
 void currentDir(char* dir, long size){
     char* path;
     char *saveptr = NULL;
@@ -154,7 +164,10 @@ void currentDir(char* dir, long size){
         strcpy(dir,path);
     free(tmp);
 }
-
+/* Funzione che presa una stringa contenente un comando lo divide in sottocomandi separati dal simbolo | e li mette
+ * in relazione usando la funzione pipe().
+ * Si occupa anche di aspettare che finiscano l'esecuzione i vari comandi e ne controlla il valore in uscita.
+ */
 void cmdHandler (char *cmd){
     char* saveptr;
     int n_proc=0;
@@ -166,24 +179,28 @@ void cmdHandler (char *cmd){
     int pipefd[2];
     int check=0;
 
-    arg = strtok_r(cmd, "|", &saveptr);
+    arg = strtok_r(cmd, "|", &saveptr); //Si inserisce dentro arg il primo comando della pipe, se non ci dovessero
+                                             //essere pipe viene inserito l'intero comando.
     while(arg != NULL) {
-        if(!parserArg(arg, &argv, &fdIn, &fdOut))
+        if(!parserArg(arg, &argv, &fdIn, &fdOut)) //Se si dovessero verificare errori facendo il parsing del comando si interrompe il ciclo
             break;
-        if (check) {
+        if (check) { //Si controlla se e' stata creata una pipe precedentemente, in caso si imposta come file descriptor
+                     //per l'input pipefd[0] (restituito dalla funzione pipe())
             fdIn = pipefd[0];
         }
-        if((arg = strtok_r(NULL, "|", &saveptr)) != NULL){
+        if((arg = strtok_r(NULL, "|", &saveptr)) != NULL){ //Si inserisce dentro arg il successivo comando e viene aperta una pipe
+                                                                    //siccome si entra nell'if solamente se nella stringa cmd ci sono almeno 2 comandi
+                                                                    //separati dal simbolo |
             pipe(pipefd);
             fdOut = pipefd[1];
-            check=1;
+            check=1; //Si segnala che è stata creata una pipe
         }
         if(!strcmp(argv[0], "cd")){
             cd(argv);
             return;
         }
         my_exec(argv,fdIn,fdOut);
-        n_proc++;
+        n_proc++; //Si conta il numero di processi per poter fare la wait
     }
     for(i=0; i<n_proc; i++) {
         wait(&status);
@@ -193,7 +210,7 @@ void cmdHandler (char *cmd){
         }
     }
 }
-
+//Si occupa di rilevare errori di sintassi nel comando.
 int validate(char* cmd){
     int i;
     int checkPipe = 0;
@@ -232,35 +249,6 @@ int validate(char* cmd){
         if((cmd[i] == '>' || cmd[i] == '<') && isspace(cmd[i+1]))
             return 0;
     }
-/*
-    for(i=0;cmd[i] != '\0'; i++){
-        if(cmd[i] == '|') //messo
-            checkPipe = 1;
-        if(cmd[i] == '|' && checkRedirect) //messo
-            return 0;
-        if(checkPipe && cmd[i] == '<') //messo
-            return 0;
-        if(cmd[i] == '>') //messo
-            checkRedirect = 1;
-        if(cmd[i] == '|' && (cmd[i+2] == '<' || cmd[i+2] == '>')) //messo
-            return 0;
-        if((cmd[i] == '|' || cmd[i] == '<' || cmd[i] == '>') && checkCD) //messo
-            return 0;
-        if((cmd[i] == '>' || cmd[i] == '<') && isspace(cmd[i+1])) //messo
-            return 0;
-        if(cmd[i]=='|' && ((isspace(cmd[i+1]) && cmd[i+2] == '|' ) || cmd[i+1]=='|') ) //messo
-            return 0;
-
-        if(cmd[i] == '|'){ //messo
-            if(isspace(cmd[i+1]))
-                i++;
-            if (!strncmp(&cmd[i + 1], "cd", 2))
-                return 0;
-            i--;
-        }
-    }
-
-*/
     return 1;
 }
 

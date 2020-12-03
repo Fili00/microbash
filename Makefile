@@ -4,7 +4,7 @@ M=main
 MB=microbash
 B=bin
 S=src
-FLAG=-Wall -O0 -pedantic -Werror -lreadline
+FLAG=-Wall -O0 -pedantic -Werror -lreadline -ggdb
 
 all: $(B)/$(MB)
 debug: $(B)/$(MB)_debug
