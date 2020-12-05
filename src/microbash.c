@@ -61,7 +61,7 @@ int parserArg(char* cmd, char*** argv, int* fdIn, int* fdOut){
         else if (cmd[i] == '<' || cmd[i] == '>')
             argCount--;
     }
-    *argv = malloc(sizeof(argCount));
+    *argv = malloc(sizeof(char*)*argCount);
     if(*argv == NULL){
         perror("malloc");
         exit(EXIT_FAILURE);
