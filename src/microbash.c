@@ -84,7 +84,7 @@ int parserArg(char* cmd, char*** argv, int* fdIn, int* fdOut){
             strcpy((*argv)[i],value);
             i++;
         }else if(arg[0]=='>') { //Si aprre un file in modalita' scrittura per la redirezione dell'output, se non esiste viene creato
-            if((*fdOut = open(arg + 1, O_WRONLY|O_CREAT, 0644)) < 0) {
+            if((*fdOut = open(arg + 1, O_WRONLY|O_CREAT|O_TRUNC, 0644)) < 0) {
                 perror("errore >");
                 return 0;
             }
