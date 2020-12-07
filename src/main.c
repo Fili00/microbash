@@ -16,8 +16,9 @@ int main() {
         currentDir(dir, size);
         strcat(dir, " $ ");
         if((cmd = readline(dir)) == NULL)
-            break; 
-        add_history(cmd);
+            break;
+        if(strcmp(cmd, ""))
+            add_history(cmd);
         if(!validate(cmd)){
             printf("Syntax error.\n");
             continue;

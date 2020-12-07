@@ -108,7 +108,7 @@ int parserArg(char* cmd, char*** argv, int* fdIn, int* fdOut){
 }
 //Funzione che preso argv contenente il comando e i suoi argomenti
 //e il numero dei file descriptor di input/output si occupa di fare la exec
-void my_exec(char** argv, int fdIn, int fdOut){
+void my_exec(char** argv, int fdIn, int fdOut, int pipeFdIn){
     pid_t pid = fork();
     if(pid<0){
         perror("Fork failed: ");
@@ -119,6 +119,10 @@ void my_exec(char** argv, int fdIn, int fdOut){
             swapfd(fdOut,STDOUT_FILENO);
         if(fdIn!=STDIN_FILENO)
             swapfd(fdIn,STDIN_FILENO);
+        if(pipeFdIn != -1) //si chiude nel processo ottenuto con la fork il file descriptor necessario per la redirezione
+                           //dell'input del comando successivo. Viene inizializzato con -1 per chiuderlo solo quando vengono
+                           //effettuate una o piu' pipe.
+            close(pipeFdIn);
         execvp(argv[0],argv);
         perror("Error executing the command");
         clean(argv);
@@ -176,7 +180,7 @@ void cmdHandler (char *cmd){
     char** argv;
     char* arg;
     int fdIn, fdOut;
-    int pipefd[2];
+    int pipefd[2]={-1,-1};
     int check=0;
 
     arg = strtok_r(cmd, "|", &saveptr); //Si inserisce dentro arg il primo comando della pipe, se non ci dovessero
@@ -199,7 +203,7 @@ void cmdHandler (char *cmd){
             cd(argv);
             return;
         }
-        my_exec(argv,fdIn,fdOut);
+        my_exec(argv,fdIn,fdOut,pipefd[0]);
         n_proc++; //Si conta il numero di processi per poter fare la wait
     }
     for(i=0; i<n_proc; i++) {
