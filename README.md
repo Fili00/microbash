@@ -7,6 +7,7 @@ la funzione system e nella redirezione I/O.
 ## Sintassi
 Trattandosi di una versione semplificata, viene semplificato anche il parsing dei comandi adottando una sintassi più limitata:
 * Deve essere presente uno spazio prima e dopo il simbolo |
-* Non devono essere presenti spazi tra il simbolo `>` o `<` ed il file dove fare la redirezione I/O \
+* Non devono essere presenti spazi tra il simbolo `>` o `<` ed il file dove fare la redirezione I/O 
+<!-- end of the list -->
 Per ulteriori dettagli consultare il pdf [micro-bash.pdf](micro-bash.pdf)
 
