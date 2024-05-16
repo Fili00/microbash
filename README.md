@@ -1,13 +1,13 @@
 # µBash
-Progetto universitario realizzato da me ed un mio compagno di corso per l'esame di sistemi di elaborazione e trasmissione dell'informazione. \
-Veniva richiesto di implementare una shell molto semplificata che implementasse i vari comandi tramite chiamate di sistema ed il comando `cd` built-in.\
-## Scopo del progetto
-Lo scopo del progetto era di esercitarsi nell'uso delle system call `fork`, `pipe` ed `exec` siccome un vincolo fondamentale da rispettare era di non utilizzare
-la funzione system e nella redirezione I/O.
-## Sintassi
-Trattandosi di una versione semplificata, viene semplificato anche il parsing dei comandi adottando una sintassi più limitata:
-* Deve essere presente uno spazio prima e dopo il simbolo |
-* Non devono essere presenti spazi tra il simbolo `>` o `<` ed il file dove fare la redirezione I/O 
+University project implemented with another student that implements a very simplified shell. \
+The shell implements the various commands via system calls and the built-in cd command.
+## Purpose
+The purpose of the project was to practice the use of system calls `fork`, `pipe` and `exec` since a key constraint to be met was not to use
+the system function and in I/O redirection.
+## Syntax
+Since this is a simplified version, command parsing is also simplified by adopting a more limited syntax:
+* There must be a space before and after the | symbol.
+* No spaces must be present between the `>` or `<` symbol and the file where to do the I/O redirection 
 <!-- end of the list -->
-Per ulteriori dettagli consultare il pdf [micro-bash.pdf](micro-bash.pdf)
+For more details see [micro-bash.pdf](micro-bash.pdf)
 
