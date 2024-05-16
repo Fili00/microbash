@@ -1,5 +1,5 @@
 # µBash
-University project implemented with another student that implements a very simplified shell. \
+University project that implements a very simplified shell. \
 The shell implements the various commands via system calls and the built-in cd command.
 ## Purpose
 The purpose of the project was to practice the use of system calls `fork`, `pipe` and `exec` since a key constraint to be met was not to use
